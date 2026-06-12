@@ -1,0 +1,93 @@
+version: '3.9'
+
+services:
+  # ── MongoDB ────────────────────────────────────────────────
+  mongo:
+    image: mongo:7.0
+    container_name: primetrade_mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: primetrade_db
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - primetrade_net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis (caching layer) ──────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: primetrade_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - primetrade_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ── Backend API ────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      target: production
+    container_name: primetrade_backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      MONGODB_URI: mongodb://admin:password123@mongo:27017/primetrade_db?authSource=admin
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-supersecretjwtkey_changethis_in_production_32chars}
+      JWT_EXPIRES_IN: 7d
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-superrefreshsecret_changethis_in_prod_32chars}
+      JWT_REFRESH_EXPIRES_IN: 30d
+      FRONTEND_URL: http://localhost:3000
+    ports:
+      - "5000:5000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - primetrade_net
+    volumes:
+      - ./backend/logs:/app/logs
+
+  # ── Frontend ───────────────────────────────────────────────
+  frontend:
+    image: node:20-alpine
+    container_name: primetrade_frontend
+    working_dir: /app
+    command: sh -c "npm install && npm start"
+    environment:
+      REACT_APP_API_URL: http://localhost:5000/api/v1
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - primetrade_net
+
+networks:
+  primetrade_net:
+    driver: bridge
+
+volumes:
+  mongo_data:
+    driver: local
