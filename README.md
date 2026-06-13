@@ -331,6 +331,9 @@ Winston logs are structured JSON — compatible with **Datadog**, **CloudWatch**
 
 ---
 
-## 📬 Contact
+## 👤 Author
 
-Built by a backend engineering candidate for **PrimeTrade.ai** — June 2026.
+Vignesh Padala
+
+B.Tech CSE (AI & ML) Student
+
